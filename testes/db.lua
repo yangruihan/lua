@@ -649,6 +649,11 @@ t = debug.getinfo(1)   -- main
 assert(t.isvararg == true and t.nparams == 0 and t.nups == 1 and
        debug.getupvalue(t.func, 1) == "_ENV")
 
+t = debug.getinfo(math.sin)   -- C function
+assert(t.isvararg == true and t.nparams == 0 and t.nups == 0)
+
+t = debug.getinfo(string.gmatch("abc", "a"))   -- C closure
+assert(t.isvararg == true and t.nparams == 0 and t.nups > 0)
 
 
 
@@ -806,8 +811,7 @@ assert(a+3 == "add" and 3-a == "sub" and a*3 == "mul" and
        -a == "unm" and #a == "len" and a&3 == "band")
 assert(a + 30000 == "add" and a - 3.0 == "sub" and a * 3.0 == "mul" and
        -a == "unm" and #a == "len" and a & 3 == "band")
-assert(a|3 == "bor" and 3~a == "bxor" and a<<3 == "shift" and
-       a>>1 == "shift")
+assert(a|3 == "bor" and 3~a == "bxor" and a<<3 == "shl" and a>>1 == "shr")
 assert (a==b and a.op == "eq")
 assert (a>=b and a.op == "order")
 assert (a>b and a.op == "order")

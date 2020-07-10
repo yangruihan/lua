@@ -27,7 +27,7 @@
 
 static const char udatatypename[] = "userdata";
 
-LUAI_DDEF const char *const luaT_typenames_[LUA_TOTALTAGS] = {
+LUAI_DDEF const char *const luaT_typenames_[LUA_TOTALTYPES] = {
   "no value",
   "nil", "boolean", udatatypename, "number",
   "string", "table", "function", udatatypename, "thread",
@@ -147,7 +147,6 @@ static int callbinTM (lua_State *L, const TValue *p1, const TValue *p2,
 
 void luaT_trybinTM (lua_State *L, const TValue *p1, const TValue *p2,
                     StkId res, TMS event) {
-  L->top = L->ci->top;
   if (!callbinTM(L, p1, p2, res, event)) {
     switch (event) {
       case TM_BAND: case TM_BOR: case TM_BXOR:
@@ -173,7 +172,7 @@ void luaT_tryconcatTM (lua_State *L) {
 
 
 void luaT_trybinassocTM (lua_State *L, const TValue *p1, const TValue *p2,
-                                       StkId res, int flip, TMS event) {
+                                       int flip, StkId res, TMS event) {
   if (flip)
     luaT_trybinTM(L, p2, p1, res, event);
   else
@@ -185,13 +184,21 @@ void luaT_trybiniTM (lua_State *L, const TValue *p1, lua_Integer i2,
                                    int flip, StkId res, TMS event) {
   TValue aux;
   setivalue(&aux, i2);
-  luaT_trybinassocTM(L, p1, &aux, res, flip, event);
+  luaT_trybinassocTM(L, p1, &aux, flip, res, event);
 }
 
 
+/*
+** Calls an order tag method.
+** For lessequal, LUA_COMPAT_LT_LE keeps compatibility with old
+** behavior: if there is no '__le', try '__lt', based on l <= r iff
+** !(r < l) (assuming a total order). If the metamethod yields during
+** this substitution, the continuation has to know about it (to negate
+** the result of r<l); bit CIST_LEQ in the call status keeps that
+** information.
+*/
 int luaT_callorderTM (lua_State *L, const TValue *p1, const TValue *p2,
                       TMS event) {
-  L->top = L->ci->top;
   if (callbinTM(L, p1, p2, L->top, event))  /* try original event */
     return !l_isfalse(s2v(L->top));
 #if defined(LUA_COMPAT_LT_LE)
@@ -233,7 +240,7 @@ void luaT_adjustvarargs (lua_State *L, int nfixparams, CallInfo *ci,
   int actual = cast_int(L->top - ci->func) - 1;  /* number of arguments */
   int nextra = actual - nfixparams;  /* number of extra arguments */
   ci->u.l.nextraargs = nextra;
-  checkstackGC(L, p->maxstacksize + 1);
+  luaD_checkstack(L, p->maxstacksize + 1);
   /* copy function to the top of the stack */
   setobjs2s(L, L->top++, ci->func);
   /* move fixed parameters to the top of the stack */
@@ -252,7 +259,7 @@ void luaT_getvarargs (lua_State *L, CallInfo *ci, StkId where, int wanted) {
   int nextra = ci->u.l.nextraargs;
   if (wanted < 0) {
     wanted = nextra;  /* get all extra arguments available */
-    checkstackp(L, nextra, where);  /* ensure stack space */
+    checkstackGCp(L, nextra, where);  /* ensure stack space */
     L->top = where + nextra;  /* next instruction will need top */
   }
   for (i = 0; i < wanted && i < nextra; i++)

@@ -221,8 +221,11 @@ assert(string.find(getoutput(), "error calling 'print'"))
 RUN('echo "io.stderr:write(1000)\ncont" | lua -e "require\'debug\'.debug()" 2> %s', out)
 checkout("lua_debug> 1000lua_debug> ")
 
--- test warnings
-RUN('echo "io.stderr:write(1); warn[[XXX]]" | lua -q 2> %s', out)
+
+print("testing warnings")
+
+-- no warnings by default
+RUN('echo "io.stderr:write(1); warn[[XXX]]" | lua 2> %s', out)
 checkout("1")
 
 prepfile[[
@@ -236,12 +239,23 @@ warn("", "@on")              -- again, no control, real warning
 warn("@on")                  -- keep it "started"
 warn("Z", "Z", "Z")          -- common warning
 ]]
-RUN('lua %s 2> %s', prog, out)
+RUN('lua -W %s 2> %s', prog, out)
 checkout[[
 Lua warning: @offXXX@off
 Lua warning: @on
 Lua warning: ZZZ
 ]]
+
+prepfile[[
+warn("@allow")
+-- create two objects to be finalized when closing state
+-- the errors in the finalizers must generate warnings
+u1 = setmetatable({}, {__gc = function () error("XYZ") end})
+u2 = setmetatable({}, {__gc = function () error("ZYX") end})
+]]
+RUN('lua -W %s 2> %s', prog, out)
+checkprogout("ZYX)\nXYZ)\n")
+
 
 -- test many arguments
 prepfile[[print(({...})[30])]]
@@ -379,12 +393,12 @@ if T then   -- test library?
   -- testing 'warn'
   warn("@store")
   warn("@123", "456", "789")
-  assert(_WARN == "@123456789")
+  assert(_WARN == "@123456789"); _WARN = false
 
   warn("zip", "", " ", "zap")
-  assert(_WARN == "zip zap")
+  assert(_WARN == "zip zap"); _WARN = false
   warn("ZIP", "", " ", "ZAP")
-  assert(_WARN == "ZIP ZAP")
+  assert(_WARN == "ZIP ZAP"); _WARN = false
   warn("@normal")
 end
 

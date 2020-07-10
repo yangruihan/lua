@@ -163,6 +163,7 @@ do
   assert(not X and coroutine.status(co) == "dead")
 
   -- error closing a coroutine
+  warn("@on")
   local x = 0
   co = coroutine.create(function()
     local y <close> = func2close(function (self,err)
@@ -177,10 +178,15 @@ do
   end)
   coroutine.resume(co)
   assert(x == 0)
-  _WARN = nil; warn("@off"); warn("@store")
+  -- with test library, use 'store' mode to check warnings
+  warn(not T and "@off" or "@store")
   local st, msg = coroutine.close(co)
-  warn("@on"); warn("@normal")
-  assert(_WARN == nil or string.find(_WARN, "200"))
+  if not T then
+    warn("@on")
+  else   -- test library
+    assert(string.find(_WARN, "200")); _WARN = false
+    warn("@normal")
+  end
   assert(st == false and coroutine.status(co) == "dead" and msg == 111)
   assert(x == 200)
 
@@ -401,7 +407,8 @@ assert(_G.f() == 12)
 
 
 if not T then
-  (Message or print)('\n >>> testC not active: skipping yield/hook tests <<<\n')
+  (Message or print)
+      ('\n >>> testC not active: skipping coroutine API tests <<<\n')
 else
   print "testing yields inside hooks"
 
@@ -558,8 +565,17 @@ else
          c == "ERRRUN" and d == 4)
 
 
-  -- using a main thread as a coroutine
+  -- using a main thread as a coroutine  (dubious use!)
   local state = T.newstate()
+
+  -- check that yielddable is working correctly
+  assert(T.testC(state, "newthread; isyieldable -1; remove 1; return 1"))
+
+  -- main thread is not yieldable
+  assert(not T.testC(state, "rawgeti R 1; isyieldable -1; remove 1; return 1"))
+
+  T.testC(state, "settop 0")
+
   T.loadlib(state)
 
   assert(T.doremote(state, [[
@@ -718,6 +734,17 @@ assert(run(function () return a / b end, {"div"}) == 10/12)
 assert(run(function () return a % b end, {"mod"}) == 10)
 assert(run(function () return a // b end, {"idiv"}) == 0)
 
+-- repeat tests with larger constants (to use 'K' opcodes)
+local a1000 = new(1000)
+
+assert(run(function () return a1000 + 1000 end, {"add"}) == 2000)
+assert(run(function () return a1000 - 25000 end, {"sub"}) == -24000)
+assert(run(function () return 2000 * a end, {"mul"}) == 20000)
+assert(run(function () return a1000 / 1000 end, {"div"}) == 1)
+assert(run(function () return a1000 % 600 end, {"mod"}) == 400)
+assert(run(function () return a1000 // 500 end, {"idiv"}) == 2)
+
+
 
 assert(run(function () return a % b end, {"mod"}) == 10)
 
@@ -730,6 +757,12 @@ assert(run(function () return a >> b end, {"shr"}) == 10 >> 12)
 assert(run(function () return 10 & b end, {"band"}) == 10 & 12)
 assert(run(function () return a | 2 end, {"bor"}) == 10 | 2)
 assert(run(function () return a ~ 2 end, {"bxor"}) == 10 ~ 2)
+assert(run(function () return a >> 2 end, {"shr"}) == 10 >> 2)
+assert(run(function () return 1 >> a end, {"shr"}) == 1 >> 10)
+assert(run(function () return a << 2 end, {"shl"}) == 10 << 2)
+assert(run(function () return 1 << a end, {"shl"}) == 1 << 10)
+assert(run(function () return 2 ~ a end, {"bxor"}) == 2 ~ 10)
+
 
 assert(run(function () return a..b end, {"concat"}) == "1012")
 
@@ -740,7 +773,7 @@ assert(run(function() return "a" .. "b" .. a .. "c" .. c .. b .. "x" end,
        {"concat", "concat", "concat"}) == "ab10chello12x")
 
 
-do   -- a few more tests for comparsion operators
+do   -- a few more tests for comparison operators
   local mt1 = {
     __le = function (a,b)
       coroutine.yield(10)

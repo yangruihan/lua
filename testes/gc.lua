@@ -369,10 +369,10 @@ if T then
     s[n] = i
   end
 
-  warn("@store")
+  warn("@on"); warn("@store")
   collectgarbage()
   assert(string.find(_WARN, "error in __gc metamethod"))
-  assert(string.match(_WARN, "@(.-)@") == "expected")
+  assert(string.match(_WARN, "@(.-)@") == "expected"); _WARN = false
   for i = 8, 10 do assert(s[i]) end
 
   for i = 1, 5 do
@@ -481,6 +481,7 @@ if T then
   u = setmetatable({}, {__gc = function () error "@expected error" end})
   u = nil
   collectgarbage()
+  assert(string.find(_WARN, "@expected error")); _WARN = false
   warn("@normal")
 end
 
@@ -639,7 +640,7 @@ do
     assert(getmetatable(o) == tt)
     -- create new objects during GC
     local a = 'xuxu'..(10+3)..'joao', {}
-    ___Glob = o  -- ressurect object!
+    ___Glob = o  -- ressurrect object!
     setmetatable({}, tt)  -- creates a new one with same metatable
     print(">>> closing state " .. "<<<\n")
   end
@@ -656,16 +657,15 @@ if T then
     n = n + 1
     assert(n == o[1])
     if n == 1 then
-      _WARN = nil
+      _WARN = false
     elseif n == 2 then
       assert(find(_WARN, "@expected warning"))
       lastmsg = _WARN    -- get message from previous error (first 'o')
     else
       assert(lastmsg == _WARN)  -- subsequent error messages are equal
     end
-    warn("@store")
+    warn("@store"); _WARN = false
     error"@expected warning"
-    warn("@normal")
   end}
   for i = 10, 1, -1 do
     -- create object and preserve it until the end

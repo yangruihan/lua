@@ -82,7 +82,7 @@ assert(c.a == nil)
 f()
 assert(c.a == 3)
 
--- old test for limits for special instructions (now just a generic test)
+-- old test for limits for special instructions
 do
   local i = 2
   local p = 4    -- p == 2^i
@@ -114,7 +114,7 @@ if rawget(_G, "T") then
   local t = T.querytab(a)
 
   for k,_ in pairs(a) do a[k] = undef end
-  collectgarbage()   -- restore GC and collect dead fiels in `a'
+  collectgarbage()   -- restore GC and collect dead fields in 'a'
   for i=0,t-1 do
     local k = querytab(a, i)
     assert(k == nil or type(k) == 'number' or k == 'alo')
@@ -264,6 +264,43 @@ do
 end
 
 
+-- testing to-be-closed x compile-time constants
+-- (there were some bugs here in Lua 5.4-rc3, due to a confusion
+-- between compile levels and stack levels of variables)
+do
+  local flag = false
+  local x = setmetatable({},
+    {__close = function() assert(flag == false); flag = true end})
+  local y <const> = nil
+  local z <const> = nil
+  do
+      local a <close> = x
+  end
+  assert(flag)   -- 'x' must be closed here
+end
+
+do
+  -- similar problem, but with implicit close in for loops
+  local flag = false
+  local x = setmetatable({},
+    {__close = function () assert(flag == false); flag = true end})
+  -- return an empty iterator, nil, nil, and 'x' to be closed
+  local function a ()
+    return (function () return nil end), nil, nil, x
+  end
+  local v <const> = 1
+  local w <const> = 1
+  local x <const> = 1
+  local y <const> = 1
+  local z <const> = 1
+  for k in a() do
+      a = k
+  end    -- ending the loop must close 'x'
+  assert(flag)   -- 'x' must be closed here
+end
+
+
+
 do
   -- calls cannot be tail in the scope of to-be-closed variables
   local X, Y
@@ -288,9 +325,8 @@ end
 
 -- auxiliary functions for testing warnings in '__close'
 local function prepwarn ()
-  warn("@off")      -- do not show (lots of) warnings
-  if not T then
-    _WARN = "OFF"    -- signal that warnings are not being captured
+  if not T then   -- no test library?
+    warn("@off")      -- do not show (lots of) warnings
   else
     warn("@store")    -- to test the warnings
   end
@@ -298,17 +334,23 @@ end
 
 
 local function endwarn ()
-  assert(T or _WARN == "OFF")
-  warn("@on")          -- back to normal
-  warn("@normal")
-  _WARN = nil
+  if not T then
+    warn("@on")          -- back to normal
+  else
+    assert(_WARN == false)
+    warn("@normal")
+  end
 end
 
 
 local function checkwarn (msg)
-  assert(_WARN == "OFF" or string.find(_WARN, msg))
+  if T then
+    assert(string.find(_WARN, msg))
+    _WARN = false    -- reset variable to check next warning
+  end
 end
 
+warn("@on")
 
 do print("testing errors in __close")
 
@@ -333,7 +375,8 @@ do print("testing errors in __close")
 
     local y <close> =
       func2close(function (self, msg)
-        assert(string.find(msg, "@z"))  -- error in 'z'
+        assert(string.find(msg, "@z"))  -- first error in 'z'
+        checkwarn("@z")   -- second error in 'z' generated a warning
         error("@y")
       end)
 
@@ -377,14 +420,14 @@ do print("testing errors in __close")
 
     local y <close> =
       func2close(function (self, msg)
-         assert(msg == 4)   -- error in body
+        assert(msg == 4)   -- error in body
+        checkwarn("@z")
         error("@y")
       end)
 
     local first = true
     local z <close> =
       func2close(function (self, msg)
-        checkwarn("@z")
         -- 'z' close is called once
         assert(first and msg == 4)
         first = false
@@ -418,16 +461,18 @@ do print("testing errors in __close")
   local st, msg = xpcall(foo, debug.traceback)
   assert(string.match(msg, "^[^ ]* @X"))
   assert(string.find(msg, "in metamethod 'close'"))
+  checkwarn("@Y")
 
   -- error in toclose in vararg function
   local function foo (...)
-    local x123 <close> = func2close(function () error("@X") end)
+    local x123 <close> = func2close(function () error("@x123") end)
   end
 
   local st, msg = xpcall(foo, debug.traceback)
-  assert(string.match(msg, "^[^ ]* @X"))
-
+  assert(string.match(msg, "^[^ ]* @x123"))
   assert(string.find(msg, "in metamethod 'close'"))
+  checkwarn("@x123")   -- from second call to close 'x123'
+
   endwarn()
 end
 

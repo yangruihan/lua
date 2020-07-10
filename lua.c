@@ -54,8 +54,9 @@ static void lstop (lua_State *L, lua_Debug *ar) {
 ** interpreter.
 */
 static void laction (int i) {
+  int flag = LUA_MASKCALL | LUA_MASKRET | LUA_MASKLINE | LUA_MASKCOUNT;
   signal(i, SIG_DFL); /* if another SIGINT happens, terminate process */
-  lua_sethook(globalL, lstop, LUA_MASKCALL | LUA_MASKRET | LUA_MASKCOUNT, 1);
+  lua_sethook(globalL, lstop, flag, 1);
 }
 
 
@@ -73,7 +74,7 @@ static void print_usage (const char *badoption) {
   "  -l name  require library 'name' into global 'name'\n"
   "  -v       show version information\n"
   "  -E       ignore environment variables\n"
-  "  -q       turn warnings off\n"
+  "  -W       turn warnings on\n"
   "  --       stop handling options\n"
   "  -        stop handling options and execute stdin\n"
   ,
@@ -264,7 +265,7 @@ static int collectargs (char **argv, int *first) {
           return has_error;  /* invalid option */
         args |= has_E;
         break;
-      case 'q':
+      case 'W':
         if (argv[i][2] != '\0')  /* extra characters? */
           return has_error;  /* invalid option */
         break;
@@ -295,7 +296,7 @@ static int collectargs (char **argv, int *first) {
 
 /*
 ** Processes options 'e' and 'l', which involve running Lua code, and
-** 'q', which also affects the state.
+** 'W', which also affects the state.
 ** Returns 0 if some code raises an error.
 */
 static int runargs (lua_State *L, char **argv, int n) {
@@ -315,8 +316,8 @@ static int runargs (lua_State *L, char **argv, int n) {
         if (status != LUA_OK) return 0;
         break;
       }
-      case 'q':
-        lua_warning(L, "@off", 0);  /* no warnings */
+      case 'W':
+        lua_warning(L, "@on", 0);  /* warnings on */
         break;
     }
   }

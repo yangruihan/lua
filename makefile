@@ -5,7 +5,7 @@
 
 # Warnings valid for both C and C++
 CWARNSCPP= \
-	-fmax-errors=5 \
+	-Wfatal-errors \
 	-Wextra \
 	-Wshadow \
 	-Wsign-compare \
@@ -14,8 +14,6 @@ CWARNSCPP= \
 	-Wredundant-decls \
 	-Wdisabled-optimization \
 	-Wdouble-promotion \
-	-Wlogical-op \
-	-Wno-aggressive-loop-optimizations \
         # the next warnings might be useful sometimes,
 	# but usually they generate too much noise
 	# -Werror \
@@ -26,6 +24,13 @@ CWARNSCPP= \
 	# -Wformat=2 \
 	# -Wcast-qual \
 
+
+# Warnings for gcc, not valid for clang
+CWARNGCC= \
+	-Wlogical-op \
+	-Wno-aggressive-loop-optimizations \
+
+
 # The next warnings are neither valid nor needed for C++
 CWARNSC= -Wdeclaration-after-statement \
 	-Wmissing-prototypes \
@@ -35,12 +40,15 @@ CWARNSC= -Wdeclaration-after-statement \
 	-Wold-style-definition \
 
 
-CWARNS= $(CWARNSCPP) $(CWARNSC)
+CWARNS= $(CWARNSCPP) $(CWARNSC) $(CWARNGCC)
 
 # Some useful compiler options for internal tests:
+# -DLUAI_ASSERT turns on all assertions inside Lua.
 # -DHARDSTACKTESTS forces a reallocation of the stack at every point where
 # the stack can be reallocated.
-# -DHARDMEMTESTS forces an emergency collection at every single allocation.
+# -DHARDMEMTESTS forces a full collection at all points where the collector
+# can run.
+# -DEMERGENCYGCTESTS forces an emergency collection at every single allocation.
 # -DEXTERNMEMCHECK removes internal consistency checking of blocks being
 # deallocated (useful when an external tool like valgrind does the check).
 # -DMAXINDEXRK=k limits range of constants in RK instruction operands.
@@ -104,16 +112,6 @@ $(CORE_T): $(CORE_O) $(AUX_O) $(LIB_O)
 
 $(LUA_T): $(LUA_O) $(CORE_T)
 	$(CC) -o $@ $(MYLDFLAGS) $(LUA_O) $(CORE_T) $(LIBS) $(MYLIBS) $(DL)
-
-
-llex.o:
-	$(CC) $(CFLAGS) -Os -c llex.c
-
-lparser.o:
-	$(CC) $(CFLAGS) -Os -c lparser.c
-
-lcode.o:
-	$(CC) $(CFLAGS) -Os -c lcode.c
 
 
 clean:
